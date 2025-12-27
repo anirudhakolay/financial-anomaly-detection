@@ -1,10 +1,14 @@
 import gradio as gr
 import pandas as pd
 import joblib
+import os
 
 # Load model artifacts
-model = joblib.load("isolation_forest.pkl")
-scaler = joblib.load("scaler.pkl")
+MODEL_PATH = "isolation_forest.pkl"
+SCALER_PATH = "scaler.pkl"
+
+model = joblib.load(MODEL_PATH)
+scaler = joblib.load(SCALER_PATH)
 
 REQUIRED_COLUMNS = [
     "Timestamp",
@@ -17,12 +21,16 @@ REQUIRED_COLUMNS = [
 ]
 
 def detect_anomalies(file):
-    df = pd.read_csv(file.name)
+    if file is None:
+        return pd.DataFrame({"Error": ["No file uploaded"]})
+
+    df = pd.read_csv(file)
 
     # Validate columns
-    if not all(col in df.columns for col in REQUIRED_COLUMNS):
+    missing_cols = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+    if missing_cols:
         return pd.DataFrame({
-            "Error": ["Uploaded CSV does not contain required columns"]
+            "Error": [f"Missing columns: {', '.join(missing_cols)}"]
         })
 
     # Feature engineering (same as training)
@@ -34,12 +42,9 @@ def detect_anomalies(file):
     ).reset_index()
 
     X = scaler.transform(
-        account_stats[[
-            "total_transactions",
-            "total_amount",
-            "avg_amount",
-            "max_amount"
-        ]]
+        account_stats[
+            ["total_transactions", "total_amount", "avg_amount", "max_amount"]
+        ]
     )
 
     preds = model.predict(X)
@@ -48,6 +53,7 @@ def detect_anomalies(file):
     ]
 
     return account_stats
+
 
 app = gr.Interface(
     fn=detect_anomalies,
@@ -58,4 +64,4 @@ app = gr.Interface(
 )
 
 if __name__ == "__main__":
-    app.launch(server_name="0.0.0.0", server_port=7860)
+    app.launch()
